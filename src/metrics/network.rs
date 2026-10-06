@@ -2,9 +2,6 @@ use std::fs;
 use std::array;
 
 
-pub const MAX_INTERFACES: usize = 16;
-
-
 /// Network traffic and error statistics for a single network interface.
 #[derive(Debug, Clone, Default)]
 pub struct InterfaceMetric {
@@ -23,41 +20,51 @@ pub struct InterfaceMetric {
 }
 
 
+/// Combined telemetry data and identity layout for a single interface.
+#[derive(Debug, Clone, Default)]
+pub struct NetworkInterface {
+    pub name: String,
+    pub mac: String,
+    pub metrics: InterfaceMetric,
+}
+
+
 #[derive(Debug)]
-pub struct NetworkSnapshot {
-    pub interfaces: [InterfaceMetric; MAX_INTERFACES],
-    pub interfaces_names: [String; MAX_INTERFACES],
+pub struct NetworkSnapshot<const N: usize = 16> {
+    pub items: [NetworkInterface; N],
     pub count: usize,
 }
 
 
-impl Default for NetworkSnapshot {
+impl<const N: usize> Default for NetworkSnapshot<N> {
     fn default() -> Self {
         Self {
-            interfaces: array::from_fn(|_| InterfaceMetric::default()),
-            interfaces_names: array::from_fn(|_| String::new()),
+            items: array::from_fn(|_| NetworkInterface::default()),
             count: 0,
         }
     }
 }
 
 
-impl NetworkSnapshot {
-    /// Returns a slice containing only the actively populated interface metrics
-    pub fn interfaces(&self) -> &[InterfaceMetric] {
-        &self.interfaces[..self.count]
+impl<const N: usize> NetworkSnapshot<N> {
+    /// Returns a slice containing only the actively populated interfaces
+    pub fn interfaces(&self) -> &[NetworkInterface] {
+        &self.items[..self.count]
     }
 
-    /// Returns a slice containing only the actively populated interface names
-    pub fn names(&self) -> &[String] {
-        &self.interfaces_names[..self.count]
+    /// Exposes a clean, direct iterator over the active interface items.
+    pub fn iter(&self) -> impl Iterator<Item = &NetworkInterface> {
+        self.items[..self.count].iter()
     }
 
-    /// Returns an iterator that yields a tuple of (&String, &InterfaceMetric) for each active interface
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &InterfaceMetric)> {
-        self.interfaces_names[..self.count]
-            .iter()
-            .zip(self.interfaces[..self.count].iter())
+    /// Returns a lazy iterator yielding only the names of active interfaces
+    pub fn names(&self) -> impl Iterator<Item = &String> {
+        self.items[..self.count].iter().map(|item| &item.name)
+    }
+
+    /// Returns a lazy iterator yielding only the MAC addresses of active interfaces
+    pub fn macs(&self) -> impl Iterator<Item = &String> {
+        self.items[..self.count].iter().map(|item| &item.mac)
     }
 }
 
@@ -71,50 +78,53 @@ impl NetworkCollector {
         Self
     }
 
-    pub fn collect(&self) -> NetworkSnapshot {
-        let mut snapshot = NetworkSnapshot::default();
+    pub fn collect<const N: usize>(&self) -> NetworkSnapshot<N> {
+        let mut snapshot = NetworkSnapshot::<N>::default();
 
         if let Ok(interfaces) = fs::read_to_string("/proc/net/dev") {
+            // Skip the first 2 lines containing system headers
             for interface in interfaces.lines().skip(2) {
 
-                // Break early if we have filled the stack-allocated array capacity
-                if snapshot.count >= MAX_INTERFACES {
+                // Safety boundary check to prevent out-of-bounds stack arrays panic
+                if snapshot.count >= N {
                     break;
                 }
 
-                // Split the line into exactly 2 parts: before and after the colon
+                // Split into: interface name (before ':') and metrics (after ':')
                 let mut parts = interface.splitn(2, ':');
-
-                // Take the first part (before ':') and clean up whitespace
                 let interface_name = parts.next().map(|s| s.trim());
-
-                // Take the second part (after ':') containing all the numeric tokens
                 let metrics_part = parts.next().map(|s| s.trim());
 
                 if let (Some(name), Some(metrics_str)) = (interface_name, metrics_part) {
                     if !name.is_empty() {
                         let mut value = metrics_str.split_whitespace();
+                        let mut interface_item = NetworkInterface::default();
 
+                        interface_item.name = name.to_string();
+
+                        // Resolve MAC address natively from sysfs
+                        let mac_path = format!("/sys/class/net/{}/address", name);
+                        interface_item.mac = fs::read_to_string(mac_path)
+                            .map(|s| s.trim().to_string())
+                            .unwrap_or_else(|_| String::from("00:00:00:00:00:00"));
+
+                        // Parse performance counters safely using combinators
                         let mut metric = InterfaceMetric::default();
-
-                        // Parse Receive (RX) metrics (columns 0, 1, 2)
                         metric.rx_bytes   = value.next().and_then(|v| v.parse().ok()).unwrap_or(0);
                         metric.rx_packets = value.next().and_then(|v| v.parse().ok()).unwrap_or(0);
                         metric.rx_errors  = value.next().and_then(|v| v.parse().ok()).unwrap_or(0);
 
-                        // Skip the next 5 unnecessary RX columns (drop, fifo, frame, compressed, multicast)
-                        // .nth(4) skips 4 elements and returns the 5th one, effectively advancing the iterator
+                        // Skip the 5 unnecessary internal intermediate fields
                         let _ = value.nth(4);
 
-                        // Parse Transmit (TX) metrics (columns 8, 9, 10)
                         metric.tx_bytes   = value.next().and_then(|v| v.parse().ok()).unwrap_or(0);
                         metric.tx_packets = value.next().and_then(|v| v.parse().ok()).unwrap_or(0);
                         metric.tx_errors  = value.next().and_then(|v| v.parse().ok()).unwrap_or(0);
 
-                        snapshot.interfaces_names[snapshot.count] = name.to_string();
-                        snapshot.interfaces[snapshot.count] = metric;
+                        interface_item.metrics = metric;
 
-                        // Increment the counter to track active entries and point to the next free cell
+                        // Securely commit to stack array
+                        snapshot.items[snapshot.count] = interface_item;
                         snapshot.count += 1;
                     }
                 }

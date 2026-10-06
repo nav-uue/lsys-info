@@ -62,14 +62,14 @@ fn main() {
     if network_snapshot.interfaces().is_empty() {
         println!("  (No active network interfaces detected)");
     }
-    for (name, metrics) in network_snapshot.iter() {
-        println!("↳ Interface: {}", name);
-        println!("  ├─ rx_bytes         : {}", metrics.rx_bytes);
-        println!("  ├─ tx_bytes         : {}", metrics.tx_bytes);
-        println!("  ├─ rx_packets       : {}", metrics.rx_packets);
-        println!("  ├─ tx_packets       : {}", metrics.tx_packets);
-        println!("  ├─ rx_errors        : {}", metrics.rx_errors);
-        println!("  └─ tx_errors        : {}", metrics.tx_errors);
+    for item in network_snapshot.iter() {
+        println!("↳ Interface: {} [{}]", item.name, item.mac);
+        println!("  ├─ rx_bytes         : {}", item.metrics.rx_bytes);
+        println!("  ├─ tx_bytes         : {}", item.metrics.tx_bytes);
+        println!("  ├─ rx_packets       : {}", item.metrics.rx_packets);
+        println!("  ├─ tx_packets       : {}", item.metrics.tx_packets);
+        println!("  ├─ rx_errors        : {}", item.metrics.rx_errors);
+        println!("  └─ tx_errors        : {}", item.metrics.tx_errors);
         println!();
     }
     println!("------------------------------------------------------------------");
