@@ -9,6 +9,7 @@ fn main() {
     let network_snapshot = sys.network();
     let disk_snapshot = sys.disk();
     let board_snapshot = sys.board();
+    let os_snapshot = sys.os();
 
     println!("==================================================================");
     println!("                      SYSTEM MONITOR REPORT                       ");
@@ -124,5 +125,27 @@ fn main() {
     println!("  ├─ date             : {}", board_snapshot.fw.date);
     println!("  └─ capabilities     : {}", board_snapshot.fw.capabilities);
 
+    println!("------------------------------------------------------------------");
+
+    // -------------------- OS -------------------- //
+    println!("\n🔹 [OS]");
+    println!("------------------------------------------------------------------");
+
+    // Render the OS Release block
+    println!("↳ Operating System metrics");
+    println!("  ├─ pretty_name      : {}", os_snapshot.release.pretty_name);
+    println!("  ├─ name             : {}", os_snapshot.release.name);
+    println!("  ├─ version_id       : {}", os_snapshot.release.version_id);
+    println!("  ├─ version          : {}", os_snapshot.release.version);
+    println!("  ├─ codename         : {}", os_snapshot.release.codename);
+    println!("  ├─ id               : {}", os_snapshot.release.id);
+    println!("  ├─ id_like          : {}", os_snapshot.release.id_like);
+    println!("  ├─ home_url         : {}", os_snapshot.release.home_url);
+    println!("  ├─ support_url      : {}", os_snapshot.release.support_url);
+    println!("  ├─ bug_report_url   : {}", os_snapshot.release.bug_report_url);
+    println!("  ├─ privacy_policy   : {}", os_snapshot.release.privacy_policy_url);
+    println!("  └─ logo             : {}", os_snapshot.release.logo);
+
     println!("\n==================================================================\n");
+
 }
