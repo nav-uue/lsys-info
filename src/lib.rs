@@ -1,7 +1,7 @@
 mod metrics;
 
 // Export the block structures publicly
-pub use metrics::memory::{MemorySnapshot, RamInfo, SwapInfo};
+pub use metrics::memory::{MemorySnapshot, RamSpaceInfo, SwapSpaceInfo};
 pub use metrics::cpu::CpuSnapshot;
 pub use metrics::network::NetworkSnapshot;
 pub use metrics::disk::DiskSnapshot;

@@ -18,18 +18,29 @@ fn main() {
     // ---------------- Memory ---------------- //
     println!("\n🔹 [MEMORY METRICS]");
     println!("------------------------------------------------------------------");
+    
+    println!("↳ Hardware RAM Information");
+    println!("  ├─ description      : {}", mem_snapshot.ram_sys.use_case_str());
+    println!("  ├─ physical_layout  : {}", mem_snapshot.ram_sys.location_str());
+    println!("  ├─ installed_cap    : {} GiB", mem_snapshot.ram_sys.installed_capacity_kb / (1024 * 1024));
+    println!("  ├─ maximum_cap      : {} GiB", mem_snapshot.ram_sys.max_capacity_kb / (1024 * 1024));
+    println!("  ├─ total_slots      : {}", mem_snapshot.ram_sys.total_slots);
+    println!("  └─ populated_slots  : {}", mem_snapshot.ram_sys.populated_slots);
+
     println!("↳ RAM");
-    println!("  ├─ total_kb         : {} KB", mem_snapshot.ram.total_kb);
-    println!("  └─ available_kb     : {} KB", mem_snapshot.ram.available_kb);
+    println!("  ├─ total_kb         : {} KB", mem_snapshot.ram_space.total_kb);
+    println!("  └─ available_kb     : {} KB", mem_snapshot.ram_space.available_kb);
+    
     println!("↳ SWAP");
-    println!("  ├─ total_kb         : {} KB", mem_snapshot.swap.total_kb);
-    println!("  └─ free_kb          : {} KB", mem_snapshot.swap.free_kb);
+    println!("  ├─ total_kb         : {} KB", mem_snapshot.swap_space.total_kb);
+    println!("  └─ free_kb          : {} KB", mem_snapshot.swap_space.free_kb);
+    
     println!("\n------------------------------------------------------------------");
 
     // ----------------- CPU info ----------------- //
     println!("\n🔹 [CPU METRICS]");
     println!("------------------------------------------------------------------");
-    println!("↳ Hardware Information");
+    println!("↳ Hardware CPU Information");
     println!("  ├─ vendor           : {}", cpu_snapshot.main.vendor);
     println!("  ├─ product          : {}", cpu_snapshot.main.product);
     match &cpu_snapshot.main.serial {
