@@ -27,6 +27,16 @@ fn main() {
     println!("  ├─ total_slots      : {}", mem_snapshot.ram_sys.total_slots);
     println!("  └─ populated_slots  : {}", mem_snapshot.ram_sys.populated_slots);
 
+    for slot in &mem_snapshot.ram_sys.slots {
+        println!("↳ Slot Information");
+        println!("  ├─ Label        : {}", slot.slot_label);
+        println!("  ├─ Product      : {}", slot.product);
+        println!("  ├─ Vendor       : {}", slot.vendor);
+        println!("  ├─ Serial       : {}", slot.serial);
+        println!("  ├─ Speed        : {} MHz", slot.speed_mhz);
+        println!("  └─ Size         : {} GiB", slot.size_kb / (1024 * 1024));
+    }
+
     println!("↳ RAM");
     println!("  ├─ total_kb         : {} KB", mem_snapshot.ram_space.total_kb);
     println!("  └─ available_kb     : {} KB", mem_snapshot.ram_space.available_kb);

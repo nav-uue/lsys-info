@@ -2,7 +2,7 @@ use std::fs;
 
 
 /// Stores the system's physical memory layout and motherboard capacity metrics.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct RamSystemInfo {
     pub location: u8,
     pub use_case: u8,
@@ -10,6 +10,7 @@ pub struct RamSystemInfo {
     pub total_slots: u16,
     pub installed_capacity_kb: u64,
     pub populated_slots: u16,
+    pub slots: Vec<SlotDetail>,
 }
 
 
@@ -34,6 +35,18 @@ impl RamSystemInfo {
 }
 
 
+#[derive(Debug, Default, Clone)]
+pub struct SlotDetail {
+    pub slot_label: String,
+    pub vendor: String,
+    pub serial: String,
+    pub product: String,
+    pub size_kb: u64,
+    pub speed_mhz: u16,
+    pub width_bits: u16,
+}
+
+
 /// Holds runtime RAM metrics parsed from /proc/meminfo
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RamSpaceInfo {
@@ -52,7 +65,7 @@ pub struct SwapSpaceInfo {
 
 
 /// A complete point-in-time snapshot of the system memory state
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct MemorySnapshot {
     pub ram_sys: RamSystemInfo, 
     pub ram_space: RamSpaceInfo,
@@ -70,6 +83,26 @@ impl MemoryCollector {
         Self
     }
 
+    /// Highly efficient, zero-allocation extraction helper targeting the null-separated text string pool.
+    fn extract_smbios_string(raw_strings: &[u8], index: usize) -> String {
+        if index == 0 {
+            return "Unknown".to_string();
+        }
+        let mut current_idx = 1;
+        let mut start = 0;
+
+        for (i, &b) in raw_strings.iter().enumerate() {
+            if b == 0 {
+                if current_idx == index {
+                    return String::from_utf8_lossy(&raw_strings[start..i]).trim().to_string();
+                }
+                start = i + 1;
+                current_idx += 1;
+            }
+        }
+        "Unknown".to_string()
+    }
+
     fn parse_system_memory_info(data: &[u8]) -> RamSystemInfo {
         let mut info = RamSystemInfo::default();
         let mut cursor = 0;
@@ -81,6 +114,19 @@ impl MemoryCollector {
             let length = data[cursor + 1] as usize;
 
             if cursor + length > data.len() { break; }
+
+            // Extract the string boundary locations right now before advancing the cursor
+            let string_section_start = cursor + length;
+            let mut string_section_end = string_section_start;
+            
+            while string_section_end + 1 < data.len() {
+                if data[string_section_end] == 0 && data[string_section_end + 1] == 0 {
+                    string_section_end += 2;
+                    break;
+                }
+                string_section_end += 1;
+            }
+            let raw_strings = &data[string_section_start..string_section_end];
 
             match struct_type {
                 // --- Type 16: Physical Memory Array ---
@@ -133,23 +179,39 @@ impl MemoryCollector {
                                 }
                             }
                             info.installed_capacity_kb += slot_size_kb;
+
+                            // EXTRACT EXTRA SLOT METADATA WITH ZERO COPIES
+                            let mut slot = SlotDetail::default();
+                            slot.size_kb = slot_size_kb;
+
+                            // Extract String Table Indices from Type 17 offsets
+                            let device_locator_idx = data[cursor + 0x10] as usize;
+                            let manufacturer_idx   = data[cursor + 0x17] as usize;
+                            let serial_number_idx  = data[cursor + 0x18] as usize;
+                            let part_number_idx    = data[cursor + 0x1A] as usize;
+
+                            slot.slot_label = Self::extract_smbios_string(raw_strings, device_locator_idx);
+                            slot.vendor     = Self::extract_smbios_string(raw_strings, manufacturer_idx);
+                            slot.serial     = Self::extract_smbios_string(raw_strings, serial_number_idx);
+                            slot.product    = Self::extract_smbios_string(raw_strings, part_number_idx);
+
+                            // Extract Data Width (Offset 0x0A, 2 bytes)
+                            slot.width_bits = u16::from_le_bytes([data[cursor + 0x0A], data[cursor + 0x0B]]);
+
+                            // Extract Configured Clock Speed (Offset 0x22, 2 bytes)
+                            if length >= 0x24 {
+                                slot.speed_mhz = u16::from_le_bytes([data[cursor + 0x22], data[cursor + 0x23]]);
+                            }
+
+                            info.slots.push(slot);
                         }
                     }
                 }
                 _ => {}
             }
 
-            // Advance cursor past the formatted structure body
-            cursor += length;
-
-            // Skip the text string area by looking for the double-null terminator (\0\0)
-            while cursor + 1 < data.len() {
-                if data[cursor] == 0 && data[cursor + 1] == 0 {
-                    cursor += 2;
-                    break;
-                }
-                cursor += 1;
-            }
+            // Directly jump to the end of the text strings region we scanned earlier
+            cursor = string_section_end;
         }
         info
     }
